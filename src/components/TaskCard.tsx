@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
-import { Calendar, Tag, AlertTriangle, Pencil, Trash2, GripVertical } from "lucide-react";
+import { Calendar, Tag, AlertTriangle, Pencil, Trash2, GripVertical, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Task = Database["public"]["Tables"]["tasks"]["Row"];
@@ -11,6 +11,7 @@ interface TaskCardProps {
   onEdit: (task: Task) => void;
   onDeleted: () => void;
   onDragStart: (task: Task) => void;
+  isDone?: boolean;
 }
 
 const PRIORITY_CONFIG = {
@@ -29,13 +30,13 @@ const isOverdue = (date: string | null) => {
   return new Date(date) < new Date();
 };
 
-export default function TaskCard({ task, onEdit, onDeleted, onDragStart }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDeleted, onDragStart, isDone = false }: TaskCardProps) {
   const [hovering, setHovering] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   const priority = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.medium;
-  const overdue = isOverdue(task.due_date);
+  const overdue = !isDone && isOverdue(task.due_date);
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -57,17 +58,30 @@ export default function TaskCard({ task, onEdit, onDeleted, onDragStart }: TaskC
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
       onClick={() => onEdit(task)}
-      className="group relative rounded-xl border border-border/60 p-4 cursor-pointer transition-all duration-200 animate-fade-in"
+      className="group relative rounded-xl border p-4 cursor-pointer transition-all duration-200 animate-fade-in"
       style={{
-        background: hovering ? "hsl(var(--surface-hover))" : "var(--gradient-card)",
+        background: isDone
+          ? "linear-gradient(145deg, hsl(142 70% 50% / 0.08), hsl(142 70% 50% / 0.04))"
+          : hovering ? "hsl(var(--surface-hover))" : "var(--gradient-card)",
+        borderColor: isDone ? "hsl(142 70% 50% / 0.25)" : "hsl(var(--border) / 0.6)",
         boxShadow: hovering ? "var(--shadow-elevated)" : "var(--shadow-card)",
         transform: hovering ? "translateY(-2px)" : "translateY(0)",
+        opacity: isDone ? 0.85 : 1,
       }}
     >
+      {/* Done checkmark */}
+      {isDone && (
+        <div className="absolute top-3 left-3">
+          <CheckCircle2 className="w-4 h-4" style={{ color: "hsl(142 70% 50%)" }} />
+        </div>
+      )}
+
       {/* Drag handle */}
-      <div className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab">
-        <GripVertical className="w-4 h-4 text-muted-foreground" />
-      </div>
+      {!isDone && (
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab">
+          <GripVertical className="w-4 h-4 text-muted-foreground" />
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className={`absolute top-3 right-3 flex gap-1 transition-opacity ${hovering ? "opacity-100" : "opacity-0"}`}>
@@ -86,17 +100,17 @@ export default function TaskCard({ task, onEdit, onDeleted, onDragStart }: TaskC
         </button>
       </div>
 
-      <div className="pr-12">
+      <div className={`${isDone ? "pl-6" : ""} pr-12`}>
         {/* Priority badge */}
         <div className="flex items-center gap-2 mb-2">
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${priority.bg} ${priority.color}`}>
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${isDone ? "opacity-50" : ""} ${priority.bg} ${priority.color}`}>
             <AlertTriangle className="w-2.5 h-2.5" />
             {priority.label}
           </span>
         </div>
 
         {/* Title */}
-        <h3 className="text-sm font-semibold text-foreground leading-snug mb-2 line-clamp-2">
+        <h3 className={`text-sm font-semibold leading-snug mb-2 line-clamp-2 ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}>
           {task.title}
         </h3>
 

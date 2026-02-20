@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
-import { Plus } from "lucide-react";
+import { Plus, CheckCircle2 } from "lucide-react";
 import TaskCard from "./TaskCard";
 import TaskModal from "./TaskModal";
 
@@ -9,14 +9,14 @@ type Task = Database["public"]["Tables"]["tasks"]["Row"];
 
 interface KanbanColumnProps {
   title: string;
-  status: "todo" | "in_progress";
+  status: "todo" | "in_progress" | "done";
   tasks: Task[];
   userId: string;
   onTasksChanged: () => void;
   accentColor: string;
   gradientBg: string;
   onDragStart: (task: Task) => void;
-  onDrop: (status: "todo" | "in_progress") => void;
+  onDrop: (status: "todo" | "in_progress" | "done") => void;
 }
 
 export default function KanbanColumn({
@@ -96,16 +96,24 @@ export default function KanbanColumn({
               style={{ background: gradientBg }}
             >
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: `${accentColor}20` }}>
-                <Plus className="w-5 h-5" style={{ color: accentColor }} />
+                {status === "done" ? (
+                  <CheckCircle2 className="w-5 h-5" style={{ color: accentColor }} />
+                ) : (
+                  <Plus className="w-5 h-5" style={{ color: accentColor }} />
+                )}
               </div>
-              <p className="text-sm font-medium text-muted-foreground">Cap tasca aquí</p>
-              <button
-                onClick={() => { setEditingTask(null); setShowModal(true); }}
-                className="mt-2 text-xs font-medium transition-colors hover:underline"
-                style={{ color: accentColor }}
-              >
-                Crear la primera
-              </button>
+              <p className="text-sm font-medium text-muted-foreground">
+                {status === "done" ? "Res completat encara" : "Cap tasca aquí"}
+              </p>
+              {status !== "done" && (
+                <button
+                  onClick={() => { setEditingTask(null); setShowModal(true); }}
+                  className="mt-2 text-xs font-medium transition-colors hover:underline"
+                  style={{ color: accentColor }}
+                >
+                  Crear la primera
+                </button>
+              )}
             </div>
           ) : (
             tasks.map((task) => (
@@ -115,21 +123,24 @@ export default function KanbanColumn({
                 onEdit={(t) => { setEditingTask(t); setShowModal(true); }}
                 onDeleted={onTasksChanged}
                 onDragStart={onDragStart}
+                isDone={status === "done"}
               />
             ))
           )}
         </div>
 
-        {/* Footer - Add task button */}
-        <div className="px-4 pb-4 pt-1">
-          <button
-            onClick={() => { setEditingTask(null); setShowModal(true); }}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-muted-foreground border border-dashed border-border/50 hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Afegir tasca
-          </button>
-        </div>
+        {/* Footer - Add task button (only for non-done columns) */}
+        {status !== "done" && (
+          <div className="px-4 pb-4 pt-1">
+            <button
+              onClick={() => { setEditingTask(null); setShowModal(true); }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-muted-foreground border border-dashed border-border/50 hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Afegir tasca
+            </button>
+          </div>
+        )}
       </div>
 
       {showModal && (
