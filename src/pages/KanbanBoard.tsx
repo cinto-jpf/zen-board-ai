@@ -238,7 +238,7 @@ export default function KanbanBoard({ user, onLogout }: KanbanBoardProps) {
       </main>
 
       {/* AI Chat */}
-      {showChat && <AIChat tasks={tasks} onClose={() => setShowChat(false)} />}
+      {showChat && <AIChat tasks={tasks} userId={user.id} onClose={() => setShowChat(false)} onTasksChanged={loadTasks} />}
     </div>
   );
 }
