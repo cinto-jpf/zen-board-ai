@@ -13,7 +13,7 @@ type TaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];
 
 interface TaskModalProps {
   task?: Task | null;
-  status: "todo" | "in_progress";
+  status: "todo" | "in_progress" | "done";
   userId: string;
   onClose: () => void;
   onSaved: () => void;

@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { User } from "@supabase/supabase-js";
-import { Kanban, LogOut, Bot, Sparkles, RefreshCw } from "lucide-react";
+import { Kanban, LogOut, Bot, Sparkles, RefreshCw, CheckCircle2, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import KanbanColumn from "@/components/KanbanColumn";
 import AIChat from "@/components/AIChat";
+import { Progress } from "@/components/ui/progress";
 
 type Task = Database["public"]["Tables"]["tasks"]["Row"];
 
@@ -49,7 +50,7 @@ export default function KanbanBoard({ user, onLogout }: KanbanBoardProps) {
     onLogout();
   };
 
-  const handleDrop = async (newStatus: "todo" | "in_progress") => {
+  const handleDrop = async (newStatus: "todo" | "in_progress" | "done") => {
     if (!draggedTask || draggedTask.status === newStatus) {
       setDraggedTask(null);
       return;
@@ -66,13 +67,21 @@ export default function KanbanBoard({ user, onLogout }: KanbanBoardProps) {
       setTasks((prev) =>
         prev.map((t) => (t.id === draggedTask.id ? { ...t, status: newStatus } : t))
       );
-      toast({ title: `Tasca moguda a ${newStatus === "todo" ? "Per fer" : "En curs"}` });
+      const statusLabels: Record<string, string> = {
+        todo: "Per fer",
+        in_progress: "En curs",
+        done: "Fet ✓",
+      };
+      toast({ title: `Tasca moguda a ${statusLabels[newStatus]}` });
     }
     setDraggedTask(null);
   };
 
   const todoTasks = tasks.filter((t) => t.status === "todo");
   const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
+  const doneTasks = tasks.filter((t) => t.status === "done");
+
+  const completionRate = tasks.length > 0 ? Math.round((doneTasks.length / tasks.length) * 100) : 0;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -97,24 +106,52 @@ export default function KanbanBoard({ user, onLogout }: KanbanBoardProps) {
         </div>
 
         {/* Stats */}
-        <div className="hidden md:flex items-center gap-6">
+        <div className="hidden md:flex items-center gap-4">
+          {/* Completion rate */}
+          <div className="flex flex-col gap-1 min-w-[120px]">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" />
+                Completat
+              </span>
+              <span className="text-xs font-bold" style={{ color: "hsl(var(--status-done-accent))" }}>
+                {completionRate}%
+              </span>
+            </div>
+            <Progress
+              value={completionRate}
+              className="h-1.5"
+              style={{ background: "hsl(var(--secondary))" }}
+            />
+          </div>
+          <div className="w-px h-10 bg-border/60" />
           <div className="text-center">
-            <p className="text-2xl font-bold text-foreground">{tasks.length}</p>
+            <p className="text-xl font-bold text-foreground">{tasks.length}</p>
             <p className="text-xs text-muted-foreground">Total</p>
           </div>
           <div className="w-px h-10 bg-border/60" />
           <div className="text-center">
-            <p className="text-2xl font-bold" style={{ color: "hsl(var(--status-todo-accent))" }}>
+            <p className="text-xl font-bold" style={{ color: "hsl(var(--status-todo-accent))" }}>
               {todoTasks.length}
             </p>
             <p className="text-xs text-muted-foreground">Per fer</p>
           </div>
           <div className="w-px h-10 bg-border/60" />
           <div className="text-center">
-            <p className="text-2xl font-bold" style={{ color: "hsl(var(--status-progress-accent))" }}>
+            <p className="text-xl font-bold" style={{ color: "hsl(var(--status-progress-accent))" }}>
               {inProgressTasks.length}
             </p>
             <p className="text-xs text-muted-foreground">En curs</p>
+          </div>
+          <div className="w-px h-10 bg-border/60" />
+          <div className="text-center flex flex-col items-center gap-0.5">
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" style={{ color: "hsl(var(--status-done-accent))" }} />
+              <p className="text-xl font-bold" style={{ color: "hsl(var(--status-done-accent))" }}>
+                {doneTasks.length}
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">Fet</p>
           </div>
         </div>
 
@@ -153,7 +190,7 @@ export default function KanbanBoard({ user, onLogout }: KanbanBoardProps) {
       <main className="flex-1 p-6">
         {loading ? (
           <div className="flex gap-6">
-            {[1, 2].map((i) => (
+            {[1, 2, 3].map((i) => (
               <div
                 key={i}
                 className="rounded-2xl border border-border/60 skeleton"
@@ -182,6 +219,17 @@ export default function KanbanBoard({ user, onLogout }: KanbanBoardProps) {
               onTasksChanged={loadTasks}
               accentColor="hsl(var(--status-progress-accent))"
               gradientBg="hsl(var(--status-progress-accent) / 0.06)"
+              onDragStart={setDraggedTask}
+              onDrop={handleDrop}
+            />
+            <KanbanColumn
+              title="Fet"
+              status="done"
+              tasks={doneTasks}
+              userId={user.id}
+              onTasksChanged={loadTasks}
+              accentColor="hsl(var(--status-done-accent))"
+              gradientBg="hsl(var(--status-done-accent) / 0.06)"
               onDragStart={setDraggedTask}
               onDrop={handleDrop}
             />

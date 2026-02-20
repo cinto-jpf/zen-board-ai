@@ -49,6 +49,8 @@
     --status-todo-accent: 243 75% 65%;
     --status-progress: 220 15% 15%;
     --status-progress-accent: 168 75% 50%;
+    --status-done: 220 15% 15%;
+    --status-done-accent: 142 70% 50%;
 
     /* Priority colors */
     --priority-high: 0 75% 60%;
@@ -74,6 +76,7 @@
     --gradient-surface: linear-gradient(180deg, hsl(220 18% 12%), hsl(220 20% 8%));
     --gradient-todo: linear-gradient(135deg, hsl(243 75% 65% / 0.15), hsl(243 75% 65% / 0.05));
     --gradient-progress: linear-gradient(135deg, hsl(168 75% 50% / 0.15), hsl(168 75% 50% / 0.05));
+    --gradient-done: linear-gradient(135deg, hsl(142 70% 50% / 0.15), hsl(142 70% 50% / 0.05));
 
     /* Shadows */
     --shadow-card: 0 4px 24px -4px hsl(220 20% 4% / 0.6), 0 1px 4px hsl(220 20% 4% / 0.4);
