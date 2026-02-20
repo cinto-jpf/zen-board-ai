@@ -5,6 +5,65 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const tools = [
+  {
+    type: "function",
+    function: {
+      name: "create_task",
+      description: "Create a new task on the Kanban board.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Task title" },
+          description: { type: "string", description: "Optional task description" },
+          priority: { type: "string", enum: ["low", "medium", "high"], description: "Task priority" },
+          status: { type: "string", enum: ["todo", "in_progress", "done"], description: "Column to place the task in" },
+          due_date: { type: "string", description: "Optional due date in YYYY-MM-DD format" },
+          tags: { type: "array", items: { type: "string" }, description: "Optional list of tags" },
+        },
+        required: ["title", "priority", "status"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "edit_task",
+      description: "Edit an existing task on the Kanban board. Only include fields that need to change.",
+      parameters: {
+        type: "object",
+        properties: {
+          task_id: { type: "string", description: "The ID of the task to edit" },
+          title: { type: "string", description: "New title" },
+          description: { type: "string", description: "New description" },
+          priority: { type: "string", enum: ["low", "medium", "high"], description: "New priority" },
+          status: { type: "string", enum: ["todo", "in_progress", "done"], description: "New status/column" },
+          due_date: { type: "string", description: "New due date in YYYY-MM-DD format" },
+          tags: { type: "array", items: { type: "string" }, description: "New list of tags" },
+        },
+        required: ["task_id"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_task",
+      description: "Delete a task from the Kanban board.",
+      parameters: {
+        type: "object",
+        properties: {
+          task_id: { type: "string", description: "The ID of the task to delete" },
+        },
+        required: ["task_id"],
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -14,22 +73,37 @@ serve(async (req) => {
 
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = `You are an intelligent Kanban board assistant. You help users manage their tasks, prioritize work, and stay productive.
+    const taskList = boardContext?.tasks
+      ?.map((t: { id: string; title: string; status: string; priority: string }) =>
+        `- ID: ${t.id} | "${t.title}" | ${t.status} | ${t.priority} priority`
+      )
+      .join("\n") || "No tasks yet";
 
-${boardContext ? `Current board state:
-- To-Do tasks: ${boardContext.todoCount}
-- In Progress tasks: ${boardContext.inProgressCount}
-- Tasks: ${boardContext.tasks?.map((t: { title: string; status: string; priority: string }) => `"${t.title}" (${t.status}, ${t.priority} priority)`).join(', ') || 'none'}
-` : ''}
+    const systemPrompt = `You are an intelligent Kanban board assistant with the ability to take actions on the board.
+
+Current board state:
+- To-Do tasks: ${boardContext?.todoCount ?? 0}
+- In Progress tasks: ${boardContext?.inProgressCount ?? 0}
+- Done tasks: ${boardContext?.doneCount ?? 0}
+
+Tasks (with IDs for editing/deleting):
+${taskList}
 
 You can:
 1. Answer general productivity and project management questions
 2. Suggest how to organize or prioritize tasks
-3. Help users think through their work on the board
-4. Provide advice on task management best practices
-5. Summarize the board status when asked
+3. **Create new tasks** using the create_task tool
+4. **Edit existing tasks** (title, description, priority, status, due date, tags) using the edit_task tool
+5. **Delete tasks** using the delete_task tool
+6. Summarize and analyze the board
 
-Be concise, helpful, and professional. Use markdown formatting for clarity. Respond in the same language as the user (Catalan, Spanish, or English).`;
+IMPORTANT RULES:
+- When the user asks you to create, edit or delete tasks, ALWAYS use the provided tools — never just describe what you would do.
+- When using edit_task or delete_task, you MUST use the exact task ID from the board state above.
+- If the user refers to a task by name, find its ID from the list and use it.
+- After performing an action, briefly confirm what you did in a friendly way.
+- Be concise, helpful, and professional. Use markdown formatting for clarity.
+- Respond in the same language as the user (Catalan, Spanish, or English).`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -43,7 +117,8 @@ Be concise, helpful, and professional. Use markdown formatting for clarity. Resp
           { role: "system", content: systemPrompt },
           ...messages,
         ],
-        stream: true,
+        tools,
+        stream: false,
       }),
     });
 
@@ -68,8 +143,9 @@ Be concise, helpful, and professional. Use markdown formatting for clarity. Resp
       });
     }
 
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    const data = await response.json();
+    return new Response(JSON.stringify(data), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("Chat function error:", e);

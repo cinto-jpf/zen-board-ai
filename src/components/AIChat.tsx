@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
-import { Bot, X, Send, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { Bot, X, Send, Loader2, Sparkles, Trash2, CheckCircle2, PlusCircle, Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
@@ -12,21 +12,29 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   id: string;
+  action?: ActionResult;
+}
+
+interface ActionResult {
+  type: "create" | "edit" | "delete";
+  taskTitle?: string;
 }
 
 interface AIChatProps {
   tasks: Task[];
+  userId: string;
   onClose: () => void;
+  onTasksChanged: () => void;
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/kanban-chat`;
 
-export default function AIChat({ tasks, onClose }: AIChatProps) {
+export default function AIChat({ tasks, userId, onClose, onTasksChanged }: AIChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: "Hola! Soc el teu assistent de KanbanAI 🤖\n\nPuc ajudar-te a:\n- **Organitzar les teves tasques** i prioritzar feina\n- **Respondre preguntes** sobre productivitat\n- **Resumir l'estat del teu board**\n- Qualsevol altra cosa que necessitis!\n\nEn què puc ajudar-te?",
+      content: "Hola! Soc el teu assistent KanbanAI 🤖\n\nAra puc realitzar **accions automàtiques** al tauler:\n- 🟢 **Crear tasques** — *\"Crea una tasca 'Reunió setmanal' amb prioritat alta\"*\n- ✏️ **Editar tasques** — *\"Canvia la prioritat de la tasca X a baixa\"*\n- 🗑️ **Eliminar tasques** — *\"Elimina la tasca 'Test'\"*\n- 💬 **Respondre preguntes** i analitzar el board\n\nEn què puc ajudar-te?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -41,7 +49,61 @@ export default function AIChat({ tasks, onClose }: AIChatProps) {
   const boardContext = {
     todoCount: tasks.filter((t) => t.status === "todo").length,
     inProgressCount: tasks.filter((t) => t.status === "in_progress").length,
-    tasks: tasks.map((t) => ({ title: t.title, status: t.status, priority: t.priority })),
+    doneCount: tasks.filter((t) => t.status === "done").length,
+    tasks: tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority })),
+  };
+
+  const executeToolCall = async (toolName: string, args: Record<string, unknown>): Promise<ActionResult | null> => {
+    try {
+      if (toolName === "create_task") {
+        const { title, description, priority, status, due_date, tags } = args as {
+          title: string; description?: string; priority: string; status: string; due_date?: string; tags?: string[];
+        };
+        const { error } = await supabase.from("tasks").insert({
+          user_id: userId,
+          title,
+          description: description ?? null,
+          priority,
+          status,
+          due_date: due_date ?? null,
+          tags: tags ?? [],
+          position: tasks.length,
+        });
+        if (error) throw error;
+        onTasksChanged();
+        return { type: "create", taskTitle: title };
+      }
+
+      if (toolName === "edit_task") {
+        const { task_id, ...updates } = args as { task_id: string; [key: string]: unknown };
+        const cleanUpdates: Record<string, unknown> = {};
+        if (updates.title !== undefined) cleanUpdates.title = updates.title;
+        if (updates.description !== undefined) cleanUpdates.description = updates.description;
+        if (updates.priority !== undefined) cleanUpdates.priority = updates.priority;
+        if (updates.status !== undefined) cleanUpdates.status = updates.status;
+        if (updates.due_date !== undefined) cleanUpdates.due_date = updates.due_date;
+        if (updates.tags !== undefined) cleanUpdates.tags = updates.tags;
+
+        const { error } = await supabase.from("tasks").update(cleanUpdates).eq("id", task_id).eq("user_id", userId);
+        if (error) throw error;
+        onTasksChanged();
+        const task = tasks.find((t) => t.id === task_id);
+        return { type: "edit", taskTitle: task?.title ?? "tasca" };
+      }
+
+      if (toolName === "delete_task") {
+        const { task_id } = args as { task_id: string };
+        const task = tasks.find((t) => t.id === task_id);
+        const { error } = await supabase.from("tasks").delete().eq("id", task_id).eq("user_id", userId);
+        if (error) throw error;
+        onTasksChanged();
+        return { type: "delete", taskTitle: task?.title ?? "tasca" };
+      }
+    } catch (err) {
+      console.error("Tool execution error:", err);
+      toast({ title: "Error executant l'acció", description: String(err), variant: "destructive" });
+    }
+    return null;
   };
 
   const sendMessage = async () => {
@@ -53,19 +115,10 @@ export default function AIChat({ tasks, onClose }: AIChatProps) {
     setInput("");
     setLoading(true);
 
-    // Save user message to DB
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from("chat_messages").insert({ user_id: user.id, role: "user", content: text });
-    }
-
     const conversationMessages = [...messages.filter((m) => m.id !== "welcome"), userMsg].map((m) => ({
       role: m.role,
       content: m.content,
     }));
-
-    let assistantContent = "";
-    const assistantId = `assistant-${Date.now()}`;
 
     try {
       const resp = await fetch(CHAT_URL, {
@@ -87,51 +140,42 @@ export default function AIChat({ tasks, onClose }: AIChatProps) {
         setLoading(false);
         return;
       }
-      if (!resp.ok || !resp.body) throw new Error("Error de connexió");
+      if (!resp.ok) throw new Error("Error de connexió");
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let done = false;
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
 
-      while (!done) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
-        buffer += decoder.decode(value, { stream: true });
+      const choice = data.choices?.[0];
+      const assistantMessage = choice?.message;
 
-        let newlineIdx: number;
-        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, newlineIdx);
-          buffer = buffer.slice(newlineIdx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || !line.trim()) continue;
-          if (!line.startsWith("data: ")) continue;
+      let actionResult: ActionResult | null = null;
+      let assistantContent = assistantMessage?.content ?? "";
 
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") { done = true; break; }
+      // Handle tool calls
+      if (assistantMessage?.tool_calls?.length) {
+        for (const toolCall of assistantMessage.tool_calls) {
+          const args = JSON.parse(toolCall.function.arguments);
+          actionResult = await executeToolCall(toolCall.function.name, args);
+        }
 
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const chunk = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (chunk) {
-              assistantContent += chunk;
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (last?.role === "assistant" && last.id === assistantId) {
-                  return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantContent } : m);
-                }
-                return [...prev, { id: assistantId, role: "assistant", content: assistantContent }];
-              });
-            }
-          } catch {
-            buffer = line + "\n" + buffer;
-            break;
-          }
+        // If no text content after tools, provide a fallback
+        if (!assistantContent) {
+          if (actionResult?.type === "create") assistantContent = `✅ Tasca **"${actionResult.taskTitle}"** creada correctament!`;
+          else if (actionResult?.type === "edit") assistantContent = `✅ Tasca **"${actionResult.taskTitle}"** editada correctament!`;
+          else if (actionResult?.type === "delete") assistantContent = `🗑️ Tasca **"${actionResult.taskTitle}"** eliminada correctament!`;
+          else assistantContent = "✅ Acció realitzada correctament!";
         }
       }
 
-      // Save assistant message
-      if (user && assistantContent) {
+      const assistantId = `assistant-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: "assistant", content: assistantContent, action: actionResult ?? undefined },
+      ]);
+
+      // Persist to DB
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
         await supabase.from("chat_messages").insert({ user_id: user.id, role: "assistant", content: assistantContent });
       }
     } catch (err) {
@@ -149,6 +193,27 @@ export default function AIChat({ tasks, onClose }: AIChatProps) {
     }]);
   };
 
+  const getActionBadge = (action: ActionResult) => {
+    if (action.type === "create") return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full mt-1"
+        style={{ background: "hsl(var(--status-done-accent) / 0.15)", color: "hsl(var(--status-done-accent))" }}>
+        <PlusCircle className="w-3 h-3" /> Tasca creada
+      </span>
+    );
+    if (action.type === "edit") return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full mt-1"
+        style={{ background: "hsl(var(--status-progress-accent) / 0.15)", color: "hsl(var(--status-progress-accent))" }}>
+        <Pencil className="w-3 h-3" /> Tasca editada
+      </span>
+    );
+    if (action.type === "delete") return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full mt-1"
+        style={{ background: "hsl(var(--destructive) / 0.15)", color: "hsl(var(--destructive))" }}>
+        <CheckCircle2 className="w-3 h-3" /> Tasca eliminada
+      </span>
+    );
+  };
+
   return (
     <div
       className="fixed bottom-6 right-6 z-50 w-96 rounded-2xl flex flex-col animate-slide-up"
@@ -156,7 +221,7 @@ export default function AIChat({ tasks, onClose }: AIChatProps) {
         background: "hsl(var(--card))",
         border: "1px solid hsl(var(--border))",
         boxShadow: "var(--shadow-elevated)",
-        height: "520px",
+        height: "540px",
       }}
     >
       {/* Header */}
@@ -170,7 +235,7 @@ export default function AIChat({ tasks, onClose }: AIChatProps) {
           </div>
           <div>
             <p className="text-sm font-semibold text-white">Assistent KanbanAI</p>
-            <p className="text-xs text-white/70">Sempre disponible</p>
+            <p className="text-xs text-white/70">Pot crear, editar i eliminar tasques</p>
           </div>
         </div>
         <div className="flex gap-1">
@@ -202,20 +267,27 @@ export default function AIChat({ tasks, onClose }: AIChatProps) {
                 <Bot className="w-4 h-4 text-white" />
               </div>
             )}
-            <div
-              className={`max-w-[80%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                msg.role === "user"
-                  ? "text-white rounded-br-sm"
-                  : "text-foreground rounded-bl-sm bg-secondary border border-border/40"
-              }`}
-              style={msg.role === "user" ? { background: "var(--gradient-primary)" } : {}}
-            >
-              {msg.role === "assistant" ? (
-                <div className="prose prose-sm prose-invert max-w-none [&>p]:m-0 [&>ul]:mt-1 [&>ul]:mb-0 [&>ol]:mt-1 [&>ol]:mb-0">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+            <div className="flex flex-col max-w-[80%]">
+              <div
+                className={`rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                  msg.role === "user"
+                    ? "text-white rounded-br-sm"
+                    : "text-foreground rounded-bl-sm bg-secondary border border-border/40"
+                }`}
+                style={msg.role === "user" ? { background: "var(--gradient-primary)" } : {}}
+              >
+                {msg.role === "assistant" ? (
+                  <div className="prose prose-sm prose-invert max-w-none [&>p]:m-0 [&>ul]:mt-1 [&>ul]:mb-0 [&>ol]:mt-1 [&>ol]:mb-0">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  msg.content
+                )}
+              </div>
+              {msg.action && (
+                <div className={msg.role === "user" ? "self-end" : "self-start"}>
+                  {getActionBadge(msg.action)}
                 </div>
-              ) : (
-                msg.content
               )}
             </div>
           </div>
@@ -247,7 +319,7 @@ export default function AIChat({ tasks, onClose }: AIChatProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-            placeholder="Escriu un missatge..."
+            placeholder="Ex: Crea una tasca 'Reunió' amb alta prioritat..."
             className="bg-secondary border-border/60 focus:border-primary/60 h-10 text-sm"
             disabled={loading}
           />
