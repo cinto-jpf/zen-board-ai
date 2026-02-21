@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
-import { Calendar, Tag, AlertTriangle, Pencil, Trash2, GripVertical, CheckCircle2 } from "lucide-react";
+import { Calendar, Tag, AlertTriangle, Pencil, Trash2, GripVertical, CheckCircle2, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Task = Database["public"]["Tables"]["tasks"]["Row"];
@@ -139,7 +139,13 @@ export default function TaskCard({ task, onEdit, onDeleted, onDragStart, isDone 
         )}
 
         {/* Footer */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {task.duracio_estimada && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="w-3.5 h-3.5" />
+              {task.duracio_estimada} min
+            </div>
+          )}
           {task.due_date && (
             <div className={`flex items-center gap-1.5 text-xs ${overdue ? "text-destructive" : "text-muted-foreground"}`}>
               <Calendar className="w-3.5 h-3.5" />
