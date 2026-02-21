@@ -70,6 +70,7 @@ export type Database = {
           created_at: string
           description: string | null
           due_date: string | null
+          duracio_estimada: number
           finalitzacio_tasca: string | null
           id: string
           position: number
@@ -84,6 +85,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           due_date?: string | null
+          duracio_estimada?: number
           finalitzacio_tasca?: string | null
           id?: string
           position?: number
@@ -98,6 +100,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           due_date?: string | null
+          duracio_estimada?: number
           finalitzacio_tasca?: string | null
           id?: string
           position?: number

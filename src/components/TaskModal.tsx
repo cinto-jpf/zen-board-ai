@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { X, Calendar, Tag, AlertTriangle } from "lucide-react";
+import { X, Calendar, Tag, AlertTriangle, Clock } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 
 type Task = Database["public"]["Tables"]["tasks"]["Row"];
@@ -32,6 +32,7 @@ export default function TaskModal({ task, status, userId, onClose, onSaved }: Ta
   const [description, setDescription] = useState(task?.description ?? "");
   const [priority, setPriority] = useState<"low" | "medium" | "high">(task?.priority as "low" | "medium" | "high" ?? "medium");
   const [dueDate, setDueDate] = useState(task?.due_date ?? "");
+  const [duracioEstimada, setDuracioEstimada] = useState<number>(task?.duracio_estimada ?? 30);
   const [tags, setTags] = useState<string[]>(task?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -58,6 +59,7 @@ export default function TaskModal({ task, status, userId, onClose, onSaved }: Ta
         status,
         priority,
         due_date: dueDate || null,
+        duracio_estimada: duracioEstimada,
         tags,
       };
 
@@ -162,6 +164,21 @@ export default function TaskModal({ task, status, userId, onClose, onSaved }: Ta
                 className="bg-secondary border-border/60 focus:border-primary/60 h-11"
               />
             </div>
+          </div>
+
+          {/* Duració estimada */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground/80 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              Duració estimada (minuts)
+            </label>
+            <Input
+              type="number"
+              min={1}
+              value={duracioEstimada}
+              onChange={(e) => setDuracioEstimada(Math.max(1, parseInt(e.target.value) || 1))}
+              className="bg-secondary border-border/60 focus:border-primary/60 h-11"
+            />
           </div>
 
           {/* Tags */}
