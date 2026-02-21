@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { User } from "@supabase/supabase-js";
+import confetti from "canvas-confetti";
 import { Kanban, LogOut, Bot, Sparkles, RefreshCw, CheckCircle2, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import KanbanColumn from "@/components/KanbanColumn";
@@ -80,6 +81,15 @@ export default function KanbanBoard({ user, onLogout }: KanbanBoardProps) {
         done: "Fet ✓",
       };
       toast({ title: `Tasca moguda a ${statusLabels[newStatus]}` });
+
+      if (newStatus === "done") {
+        confetti({
+          particleCount: 150,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ["#22c55e", "#4ade80", "#86efac", "#fbbf24", "#60a5fa"],
+        });
+      }
     }
     setDraggedTask(null);
   };
