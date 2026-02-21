@@ -139,12 +139,20 @@ export default function TaskCard({ task, onEdit, onDeleted, onDragStart, isDone 
         )}
 
         {/* Footer */}
-        {task.due_date && (
-          <div className={`flex items-center gap-1.5 text-xs ${overdue ? "text-destructive" : "text-muted-foreground"}`}>
-            <Calendar className="w-3.5 h-3.5" />
-            {overdue ? "⚠ " : ""}{formatDate(task.due_date)}
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {task.due_date && (
+            <div className={`flex items-center gap-1.5 text-xs ${overdue ? "text-destructive" : "text-muted-foreground"}`}>
+              <Calendar className="w-3.5 h-3.5" />
+              {overdue ? "⚠ " : ""}{formatDate(task.due_date)}
+            </div>
+          )}
+          {isDone && (task as any).finalitzacio_tasca && (
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: "hsl(var(--status-done-accent))" }}>
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {new Date((task as any).finalitzacio_tasca).toLocaleString("ca-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

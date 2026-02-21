@@ -56,9 +56,16 @@ export default function KanbanBoard({ user, onLogout }: KanbanBoardProps) {
       return;
     }
 
+    const updateData: Record<string, unknown> = { status: newStatus };
+    if (newStatus === "done") {
+      updateData.finalitzacio_tasca = new Date().toISOString();
+    } else {
+      updateData.finalitzacio_tasca = null;
+    }
+
     const { error } = await supabase
       .from("tasks")
-      .update({ status: newStatus })
+      .update(updateData)
       .eq("id", draggedTask.id);
 
     if (error) {
